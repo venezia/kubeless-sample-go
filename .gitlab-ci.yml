@@ -1,0 +1,50 @@
+variables:
+  DOCKER_DRIVER: overlay2
+  KUBELESS_IMAGE: registry.gitlab.com/mvenezia/kubeless-cli
+  KUBELESS_VERSION: v1.0.0-alpha.7
+
+image: ${KUBELESS_IMAGE}:${KUBELESS_VERSION}
+
+before_script:
+ - mkdir -p /root/.kube
+ - echo $KUBECONFIG_CONTENTS | base64 -d > /root/.kube/config
+
+stages:
+  - build
+  - test
+  - publish
+  - cleanup
+
+build:branch:
+  stage: build
+  only:
+    - branches
+  script:
+    - /kubeless function update ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_NAME} -f function.go -n kubeless --handler placeholder.DoStuff --runtime go1.10 || /kubeless function deploy ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_NAME} -f function.go -n kubeless --handler placeholder.DoStuff --runtime go1.10
+    - /kubeless trigger http create ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_NAME} --hostname ${CI_COMMIT_REF_NAME}.${CI_PROJECT_PATH_SLUG}.erie.cluster.cnct.io --namespace kubeless --function-name ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_NAME} || echo "Already exists, probably"
+
+build:branch:
+  stage: build
+  except:
+    - branches
+  script:
+    - /kubeless function update ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_SHA} -f function.go -n kubeless --handler placeholder.DoStuff --runtime go1.10 || /kubeless function deploy ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_SHA} -f function.go -n kubeless --handler placeholder.DoStuff --runtime go1.10
+    - /kubeless trigger http create ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_SHA} --hostname ${CI_COMMIT_SHA}.${CI_PROJECT_PATH_SLUG}.erie.cluster.cnct.io --namespace kubeless --function-name ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_NAME} || echo "Already exists, probably"
+
+cleanup:teardown:branches:
+  stage: cleanup
+  only:
+    - branches
+  script:
+    - /kubeless trigger http delete ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_NAME} --namespace kubeless || echo "Already deleted, probably"
+    - /kubeless function delete ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_NAME} -n kubeless || echo "Already deleted, probably"
+  when: manual
+  
+  cleanup:teardown:branches:
+  stage: cleanup
+  except:
+    - branches
+  script:
+    - /kubeless trigger http delete ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_SHA} --namespace kubeless || echo "Already deleted, probably"
+    - /kubeless function delete ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_SHA} -n kubeless || echo "Already deleted, probably"
+  when: manual
