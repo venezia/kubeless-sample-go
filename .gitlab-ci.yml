@@ -40,7 +40,7 @@ cleanup:teardown:branches:
     - /kubeless function delete ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_NAME} -n kubeless || echo "Already deleted, probably"
   when: manual
   
-  cleanup:teardown:notbranches:
+cleanup:teardown:notbranches:
   stage: cleanup
   except:
     - branches
